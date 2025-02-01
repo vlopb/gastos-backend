@@ -8,21 +8,28 @@ const transaccionesRoutes = require('./routes/transacciones');
 
 const app = express();
 
-// Configurar headers de seguridad
+// Configurar headers de seguridad de manera más permisiva
 app.use((req, res, next) => {
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';");
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Política de seguridad más permisiva
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self' * data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' * data: blob: 'unsafe-inline'; connect-src 'self' *;"
+    );
+    // Permitir cookies en contexto cross-origin
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     next();
 });
 
-// Configuración CORS más específica
+// Configuración CORS actualizada
 app.use(cors({
-    origin: process.env.FRONTEND_URL || '*', // Reemplaza con tu URL del frontend
+    origin: true, // Esto permite que el navegador lea el Access-Control-Allow-Origin
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    exposedHeaders: ['set-cookie']
 }));
 
 app.use(express.json());
@@ -36,22 +43,32 @@ if (!MONGO_URI) {
 
 let db;
 
+// Mover las rutas fuera de la función connectDB
+// Ruta para el favicon con tipo de contenido correcto
+app.get('/favicon.ico', (req, res) => {
+    res.set('Content-Type', 'image/x-icon');
+    res.status(204).end();
+});
+
+// Ruta raíz
+app.get('/', (req, res) => {
+    res.json({
+        status: 'success',
+        message: 'API is running',
+        version: '1.0.0',
+        endpoints: {
+            proyectos: '/proyectos',
+            transacciones: '/proyectos'
+        }
+    });
+});
+
 async function connectDB() {
     try {
         const client = await MongoClient.connect(MONGO_URI);
         db = client.db('finanzas');
         console.log('Conectado a MongoDB');
         
-        // Ruta para el favicon
-        app.get('/favicon.ico', (req, res) => {
-            res.status(204).end();
-        });
-
-        // Ruta raíz
-        app.get('/', (req, res) => {
-            res.send('API is running');
-        });
-
         // Inicializar rutas después de conectar a la DB
         app.use('/proyectos', proyectosRoutes(db));
         app.use('/proyectos', transaccionesRoutes(db));
