@@ -6,6 +6,7 @@ require('dotenv').config();
 const proyectosRoutes = require('./routes/proyectos');
 const transaccionesRoutes = require('./routes/transacciones');
 
+
 const app = express();
 app.use(cors());
 app.use(express.json());
