@@ -6,10 +6,16 @@ module.exports = (db) => {
     // GET todos los proyectos
     router.get('/', async (req, res) => {
         try {
+            console.log('Obteniendo proyectos...');
             const proyectos = await db.collection('proyectos').find({}).toArray();
+            console.log('Proyectos encontrados:', proyectos.length);
             res.json(proyectos);
         } catch (error) {
-            res.status(500).json({ error: 'Error al obtener proyectos' });
+            console.error('Error al obtener proyectos:', error);
+            res.status(500).json({ 
+                error: 'Error al obtener proyectos',
+                details: error.message 
+            });
         }
     });
 
@@ -17,13 +23,23 @@ module.exports = (db) => {
     router.post('/', async (req, res) => {
         try {
             const nuevoProyecto = {
-                ...req.body,
+                nombre: req.body.nombre,
+                descripcion: req.body.descripcion || '',
+                fecha_creacion: new Date(),
                 transacciones: []
             };
+            
             const result = await db.collection('proyectos').insertOne(nuevoProyecto);
-            res.status(201).json({ ...nuevoProyecto, _id: result.insertedId });
+            res.status(201).json({
+                mensaje: 'Proyecto creado con éxito',
+                proyecto: { ...nuevoProyecto, _id: result.insertedId }
+            });
         } catch (error) {
-            res.status(500).json({ error: 'Error al crear proyecto' });
+            console.error('Error al crear proyecto:', error);
+            res.status(500).json({ 
+                error: 'Error al crear proyecto',
+                details: error.message 
+            });
         }
     });
 

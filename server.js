@@ -8,38 +8,28 @@ const transaccionesRoutes = require('./routes/transacciones');
 
 const app = express();
 
-// Configurar headers de seguridad de manera más permisiva
+// Configuración CORS actualizada
+const corsOptions = {
+    origin: [
+        'https://gastos-cyan.vercel.app',
+        'http://localhost:3000'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// Middleware para logging
 app.use((req, res, next) => {
-    // Política de seguridad más permisiva
-    res.setHeader(
-        'Content-Security-Policy',
-        "default-src 'self' * data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' * data: blob: 'unsafe-inline'; connect-src 'self' *;"
-    );
-    // Permitir cookies en contexto cross-origin
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    console.log(`${req.method} ${req.url}`);
     next();
 });
 
-// Configuración CORS actualizada
-app.use(cors({
-    origin: true, // Esto permite que el navegador lea el Access-Control-Allow-Origin
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-    exposedHeaders: ['set-cookie']
-}));
-
-app.use(express.json());
-
-// Conexión MongoDB
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) {
-    console.error('Error: MONGO_URI no está definida en las variables de entorno');
-    process.exit(1);
-}
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/?retryWrites=true&w=majority';
 
 let db;
 
@@ -65,11 +55,14 @@ app.get('/', (req, res) => {
 
 async function connectDB() {
     try {
-        const client = await MongoClient.connect(MONGO_URI);
+        const client = await MongoClient.connect(MONGO_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+        });
         db = client.db('finanzas');
         console.log('Conectado a MongoDB');
         
-        // Inicializar rutas después de conectar a la DB
+        // Inicializar rutas
         app.use('/proyectos', proyectosRoutes(db));
         app.use('/proyectos', transaccionesRoutes(db));
         
@@ -80,8 +73,11 @@ async function connectDB() {
 }
 
 const PORT = process.env.PORT || 5000;
+
 connectDB().then(() => {
     app.listen(PORT, () => {
         console.log(`Servidor corriendo en puerto ${PORT}`);
     });
-}); 
+});
+
+module.exports = app; 
