@@ -12,7 +12,12 @@ app.use(cors());
 app.use(express.json());
 
 // Conexión MongoDB
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/?retryWrites=true&w=majority';
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+    console.error('Error: MONGO_URI no está definida en las variables de entorno');
+    process.exit(1);
+}
+
 let db;
 
 async function connectDB() {
