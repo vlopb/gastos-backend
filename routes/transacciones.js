@@ -5,16 +5,19 @@ const { ObjectId } = require('mongodb');
 module.exports = (db) => {
     // POST nueva transacción
     router.post('/:proyectoId/transacciones', async (req, res) => {
-        const session = db.client.startSession();
+        let session;
         try {
-            await session.withTransaction(async () => {
-                if (!ObjectId.isValid(req.params.proyectoId)) {
-                    throw new Error('ID inválido');
-                }
+            if (!ObjectId.isValid(req.params.proyectoId)) {
+                return res.status(400).json({ error: 'ID inválido' });
+            }
 
-                const { descripcion, tipo, fecha, monto } = req.body;
-                
-                // Obtener el proyecto con un bloqueo optimista
+            const { descripcion, tipo, fecha, monto } = req.body;
+            session = await db.client.startSession();
+            
+            let transaccionResponse;
+            
+            await session.withTransaction(async () => {
+                // Obtener el proyecto
                 const proyecto = await db.collection('proyectos').findOne(
                     { _id: new ObjectId(req.params.proyectoId) },
                     { session }
@@ -35,7 +38,6 @@ module.exports = (db) => {
                     updatedAt: new Date()
                 };
 
-                // Actualizar con timestamp
                 const result = await db.collection('proyectos').updateOne(
                     { _id: new ObjectId(req.params.proyectoId) },
                     { 
@@ -49,20 +51,26 @@ module.exports = (db) => {
                     throw new Error('No se pudo agregar la transacción');
                 }
 
-                res.json({ 
-                    mensaje: 'Transacción agregada con éxito', 
+                transaccionResponse = {
+                    mensaje: 'Transacción agregada con éxito',
                     transaccion: { ...nuevaTransaccion, index },
                     timestamp: new Date()
-                });
+                };
             });
+
+            // Enviar respuesta después de que la transacción se complete
+            return res.json(transaccionResponse);
+
         } catch (error) {
             console.error('Error al agregar transacción:', error);
-            res.status(error.message.includes('ID inválido') ? 400 : 500).json({ 
+            return res.status(error.message.includes('ID inválido') ? 400 : 500).json({
                 error: 'Error al agregar transacción',
-                details: error.message 
+                details: error.message
             });
         } finally {
-            await session.endSession();
+            if (session) {
+                await session.endSession();
+            }
         }
     });
 
