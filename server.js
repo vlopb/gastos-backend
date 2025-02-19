@@ -59,20 +59,19 @@ app.get('/', (req, res) => {
     });
 });
 
-// Configuración de MongoDB con opciones más estrictas y session
+// Configuración de MongoDB actualizada
 const MONGO_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
     w: 'majority',
-    wtimeout: 2500,
+    wtimeoutMS: 2500,  // Cambiado de wtimeout a wtimeoutMS
     retryWrites: true,
-    readPreference: 'primary',
-    directConnection: true,
     maxPoolSize: 10,
     minPoolSize: 5,
     maxIdleTimeMS: 15000,
     socketTimeoutMS: 30000,
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 5000
+    // Eliminado directConnection ya que no es compatible con SRV
 };
 
 async function setupIndexes(db) {
@@ -101,30 +100,45 @@ async function connectDB() {
         await db.command({ ping: 1 });
         console.log('Conectado exitosamente a MongoDB');
         
-        // Inicializar rutas
+        // Inicializar rutas después de confirmar la conexión
         app.use('/proyectos', proyectosRoutes(db));
         app.use('/proyectos', transaccionesRoutes(db));
         
     } catch (error) {
         console.error('Error conectando a MongoDB:', error);
-        process.exit(1);
+        // No terminar el proceso, solo registrar el error
+        console.error('Detalles del error:', error.message);
     }
 }
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Servidor corriendo en puerto ${PORT}`);
+// Iniciar el servidor primero
+const server = app.listen(PORT, () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+});
+
+// Luego intentar conectar a MongoDB
+connectDB().catch(error => {
+    console.error('Error inicial conectando a MongoDB:', error);
+    // No cerrar el servidor, permitir reintentos
+});
+
+// Manejador de errores global
+app.use((err, req, res, next) => {
+    console.error('Error en la aplicación:', err);
+    res.status(500).json({
+        error: 'Error interno del servidor',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Error interno'
     });
 });
 
-// Agregar después de las rutas
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        error: 'Error interno del servidor',
-        message: err.message
+// Manejar señales de terminación
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM, cerrando servidor...');
+    server.close(() => {
+        console.log('Servidor cerrado');
+        process.exit(0);
     });
 });
 
