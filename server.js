@@ -8,24 +8,13 @@ const transaccionesRoutes = require('./routes/transacciones');
 
 const app = express();
 
-// Configuración CORS específica
-const corsOptions = {
-    origin: [
-        'http://localhost:3000',
-        'https://gastos-cyan.vercel.app',
-        'https://gastos-production.up.railway.app'  // Agregar el dominio de Railway
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+// Configuración CORS
+app.use(cors({
+    origin: ['http://localhost:3000', 'https://gastos-cyan.vercel.app', 'https://gastos-production.up.railway.app'],
     credentials: true,
-    optionsSuccessStatus: 204  // Cambiado a 204 para preflight
-};
-
-// Aplicar CORS antes de cualquier ruta
-app.use(cors(corsOptions));
-
-// Pre-flight requests
-app.options('*', cors(corsOptions));
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 
 app.use(express.json());
 
@@ -35,24 +24,22 @@ app.use((req, res, next) => {
     next();
 });
 
-// Asegurarnos que la URI tenga el formato correcto para SRV
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/finanzas?retryWrites=true&w=majority';
-
-// Configuración de MongoDB extremadamente simple
-const MONGO_OPTIONS = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-};
+// Modificar la URI para usar el formato correcto sin opciones en la URL
+const MONGO_URI = 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net';
+const DB_NAME = 'finanzas';
 
 let db = null;
-let client = null;
 
 async function connectDB() {
     try {
-        // Intentar conectar sin opciones adicionales
-        client = new MongoClient(MONGO_URI);
+        // Crear el cliente sin ninguna opción
+        const client = new MongoClient(MONGO_URI);
+        
+        // Conectar
         await client.connect();
-        db = client.db('finanzas');
+        
+        // Obtener la base de datos
+        db = client.db(DB_NAME);
         
         // Verificar la conexión
         await db.command({ ping: 1 });
@@ -60,8 +47,7 @@ async function connectDB() {
         
         return db;
     } catch (error) {
-        console.error('Error conectando a MongoDB:', error);
-        // No lanzar el error, solo registrarlo
+        console.error('Error de conexión a MongoDB:', error);
         return null;
     }
 }
@@ -74,54 +60,37 @@ app.get('/favicon.ico', (req, res) => {
 
 // Ruta raíz
 app.get('/', (req, res) => {
-    res.json({
-        status: 'success',
-        message: 'API is running',
-        version: '1.0.0',
-        endpoints: {
-            proyectos: '/proyectos',
-            transacciones: '/proyectos'
-        }
-    });
+    res.json({ status: 'API is running' });
 });
 
-// Inicializar el servidor primero
+// Inicializar servidor
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, async () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+const server = app.listen(PORT, () => {
+    console.log(`Servidor iniciado en puerto ${PORT}`);
     
-    try {
-        const database = await connectDB();
+    // Intentar conectar a MongoDB
+    connectDB().then(database => {
         if (database) {
-            // Solo configurar rutas si la conexión fue exitosa
             app.use('/proyectos', proyectosRoutes(database));
             app.use('/proyectos', transaccionesRoutes(database));
-            console.log('Rutas configuradas correctamente');
+            console.log('Rutas configuradas');
         }
-    } catch (error) {
-        console.error('Error al inicializar la base de datos:', error);
-    }
-});
-
-// Manejador de errores global
-app.use((err, req, res, next) => {
-    console.error('Error en la aplicación:', err);
-    res.status(500).json({
-        error: 'Error interno del servidor',
-        message: 'Error interno'
+    }).catch(err => {
+        console.error('Error al configurar la base de datos:', err);
     });
 });
 
-// Manejo de cierre limpio
-process.on('SIGTERM', async () => {
-    try {
-        if (client) {
-            await client.close();
-        }
-        server.close();
-    } catch (error) {
-        console.error('Error al cerrar:', error);
-    }
+// Manejador de errores
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+});
+
+process.on('SIGTERM', () => {
+    server.close(() => {
+        console.log('Servidor cerrado');
+        process.exit(0);
+    });
 });
 
 module.exports = app; 
