@@ -34,32 +34,31 @@ module.exports = (db) => {
     });
 
     // PUT/PATCH para actualizar una transacción
-    router.put('/:proyectoId/transacciones/:transaccionId', async (req, res) => {
+    router.put('/:proyectoId/transacciones/:index', async (req, res) => {
         try {
             if (!ObjectId.isValid(req.params.proyectoId)) {
                 return res.status(400).json({ error: 'ID de proyecto inválido' });
             }
 
             const { descripcion, tipo, fecha, monto } = req.body;
-            const transaccionId = parseInt(req.params.transaccionId);
+            const index = parseInt(req.params.index);
 
             const result = await db.collection('proyectos').updateOne(
-                { 
-                    _id: new ObjectId(req.params.proyectoId),
-                    'transacciones.id': transaccionId
-                },
+                { _id: new ObjectId(req.params.proyectoId) },
                 { 
                     $set: {
-                        'transacciones.$.descripcion': descripcion,
-                        'transacciones.$.tipo': tipo,
-                        'transacciones.$.fecha': fecha,
-                        'transacciones.$.monto': parseFloat(monto)
+                        [`transacciones.${index}`]: {
+                            descripcion,
+                            tipo,
+                            fecha,
+                            monto: parseFloat(monto)
+                        }
                     }
                 }
             );
 
             if (result.matchedCount === 0) {
-                return res.status(404).json({ error: 'Transacción no encontrada' });
+                return res.status(404).json({ error: 'Proyecto no encontrado' });
             }
 
             if (result.modifiedCount === 0) {
@@ -68,7 +67,7 @@ module.exports = (db) => {
 
             res.json({ 
                 mensaje: 'Transacción actualizada con éxito',
-                transaccion: { descripcion, tipo, fecha, monto, id: transaccionId }
+                transaccion: { descripcion, tipo, fecha, monto, index }
             });
         } catch (error) {
             console.error('Error al actualizar transacción:', error);
