@@ -10,11 +10,15 @@ const app = express();
 
 // Configuración CORS específica
 const corsOptions = {
-    origin: ['http://localhost:3000', 'https://gastos-cyan.vercel.app'],
+    origin: [
+        'http://localhost:3000',
+        'https://gastos-cyan.vercel.app',
+        'https://gastos-production.up.railway.app'  // Agregar el dominio de Railway
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 204  // Cambiado a 204 para preflight
 };
 
 // Aplicar CORS antes de cualquier ruta
