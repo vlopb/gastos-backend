@@ -11,6 +11,18 @@ module.exports = (db) => {
             }
 
             const { descripcion, tipo, fecha, monto } = req.body;
+            
+            // Primero obtenemos el proyecto para saber el índice que tendrá la nueva transacción
+            const proyecto = await db.collection('proyectos').findOne(
+                { _id: new ObjectId(req.params.proyectoId) }
+            );
+
+            if (!proyecto) {
+                return res.status(404).json({ error: 'Proyecto no encontrado' });
+            }
+
+            const index = proyecto.transacciones ? proyecto.transacciones.length : 0;
+            
             const nuevaTransaccion = {
                 descripcion,
                 tipo: tipo.toLowerCase(),
@@ -27,9 +39,17 @@ module.exports = (db) => {
                 return res.status(500).json({ error: 'No se pudo agregar la transacción' });
             }
 
-            res.json({ mensaje: 'Transacción agregada con éxito', transaccion: nuevaTransaccion });
+            // Devolvemos la transacción con su índice
+            res.json({ 
+                mensaje: 'Transacción agregada con éxito', 
+                transaccion: { ...nuevaTransaccion, index }
+            });
         } catch (error) {
-            res.status(500).json({ error: 'Error al agregar transacción' });
+            console.error('Error al agregar transacción:', error);
+            res.status(500).json({ 
+                error: 'Error al agregar transacción',
+                details: error.message 
+            });
         }
     });
 

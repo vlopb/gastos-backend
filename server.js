@@ -53,12 +53,18 @@ app.get('/', (req, res) => {
     });
 });
 
+// Configuración de MongoDB con opciones más estrictas
+const MONGO_OPTIONS = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    w: 'majority', // Espera confirmación de la mayoría de los nodos
+    wtimeout: 2500, // Timeout para la operación de escritura
+    retryWrites: true // Reintentar escrituras fallidas
+};
+
 async function connectDB() {
     try {
-        const client = await MongoClient.connect(MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        const client = await MongoClient.connect(MONGO_URI, MONGO_OPTIONS);
         db = client.db('finanzas');
         console.log('Conectado a MongoDB');
         
