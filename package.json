@@ -19,5 +19,8 @@
   },
   "engines": {
     "node": ">=14.0.0"
-  }
-} 
+  },
+  "repository": "https://github.com/vlopb/gastos-backend.git",
+  "author": "vlopb <vlopezb@gmail.com>",
+  "license": "MIT"
+}
