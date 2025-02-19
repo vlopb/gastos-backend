@@ -6,19 +6,16 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/proyectos/(.*)",
-      "dest": "server.js"
+      "source": "/proyectos/(.*)",
+      "destination": "/server.js"
     },
     {
-      "src": "/(.*)",
-      "dest": "server.js"
+      "source": "/(.*)",
+      "destination": "/server.js"
     }
   ],
-  "env": {
-    "MONGO_URI": "@mongo_uri"
-  },
   "headers": [
     {
       "source": "/(.*)",
@@ -29,5 +26,8 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
       ]
     }
-  ]
+  ],
+  "env": {
+    "MONGO_URI": "@mongo_uri"
+  }
 } 
