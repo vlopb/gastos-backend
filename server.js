@@ -8,13 +8,17 @@ const transaccionesRoutes = require('./routes/transacciones');
 
 const app = express();
 
-// Configuración CORS
+// Configuración CORS más permisiva para desarrollo
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://gastos-cyan.vercel.app', 'https://gastos-production.up.railway.app'],
+    origin: true, // Permite cualquier origen en desarrollo
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    optionsSuccessStatus: 200
 }));
+
+// Pre-flight requests
+app.options('*', cors());
 
 app.use(express.json());
 
@@ -24,22 +28,20 @@ app.use((req, res, next) => {
     next();
 });
 
-// Modificar la URI para usar el formato correcto sin opciones en la URL
-const MONGO_URI = 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net';
-const DB_NAME = 'finanzas';
+// Modificar la URI de MongoDB
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/finanzas';
 
 let db = null;
 
 async function connectDB() {
     try {
-        // Crear el cliente sin ninguna opción
-        const client = new MongoClient(MONGO_URI);
+        const client = new MongoClient(MONGO_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
         
-        // Conectar
         await client.connect();
-        
-        // Obtener la base de datos
-        db = client.db(DB_NAME);
+        const db = client.db();
         
         // Verificar la conexión
         await db.command({ ping: 1 });
@@ -48,7 +50,7 @@ async function connectDB() {
         return db;
     } catch (error) {
         console.error('Error de conexión a MongoDB:', error);
-        return null;
+        throw error; // Propagar el error para mejor debugging
     }
 }
 
