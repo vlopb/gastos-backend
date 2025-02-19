@@ -3,75 +3,85 @@ const { MongoClient } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config();
 
+const proyectosRoutes = require('./routes/proyectos');
+const transaccionesRoutes = require('./routes/transacciones');
+
 const app = express();
 
-// Configuración básica
-app.use(express.json());
-app.use(cors({
-    origin: '*', // Permitir todos los orígenes temporalmente para debugging
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
-
-// Logging middleware
+// Configurar headers de seguridad de manera más permisiva
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    // Política de seguridad más permisiva
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self' * data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' * data: blob: 'unsafe-inline'; connect-src 'self' *;"
+    );
+    // Permitir cookies en contexto cross-origin
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     next();
 });
 
-// Ruta de prueba
-app.get('/test', (req, res) => {
-    res.json({ status: 'API is running' });
-});
+// Configuración CORS actualizada
+app.use(cors({
+    origin: true, // Esto permite que el navegador lea el Access-Control-Allow-Origin
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    exposedHeaders: ['set-cookie']
+}));
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/finanzas';
-let db = null;
+app.use(express.json());
 
-async function initializeRoutes(database) {
-    const proyectosRoutes = require('./routes/proyectos');
-    const transaccionesRoutes = require('./routes/transacciones');
-    
-    app.use('/proyectos', proyectosRoutes(database));
-    app.use('/proyectos', transaccionesRoutes(database));
-    
-    console.log('Rutas configuradas');
+// Conexión MongoDB
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+    console.error('Error: MONGO_URI no está definida en las variables de entorno');
+    process.exit(1);
 }
 
-async function connectDB() {
-    try {
-        const client = new MongoClient(MONGO_URI);
-        await client.connect();
-        db = client.db();
-        
-        await db.command({ ping: 1 });
-        console.log('Conectado exitosamente a MongoDB');
-        
-        await initializeRoutes(db);
-        return db;
-    } catch (error) {
-        console.error('Error de conexión a MongoDB:', error);
-        throw error;
-    }
-}
+let db;
 
-// Iniciar servidor
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
-    console.log(`Servidor iniciado en puerto ${PORT}`);
-    try {
-        await connectDB();
-    } catch (err) {
-        console.error('Error al inicializar:', err);
-    }
+// Mover las rutas fuera de la función connectDB
+// Ruta para el favicon con tipo de contenido correcto
+app.get('/favicon.ico', (req, res) => {
+    res.set('Content-Type', 'image/x-icon');
+    res.status(204).end();
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({ 
-        error: 'Error interno del servidor',
-        message: err.message 
+// Ruta raíz
+app.get('/', (req, res) => {
+    res.json({
+        status: 'success',
+        message: 'API is running',
+        version: '1.0.0',
+        endpoints: {
+            proyectos: '/proyectos',
+            transacciones: '/proyectos'
+        }
     });
 });
 
-module.exports = app; 
+async function connectDB() {
+    try {
+        const client = await MongoClient.connect(MONGO_URI);
+        db = client.db('finanzas');
+        console.log('Conectado a MongoDB');
+        
+        // Inicializar rutas después de conectar a la DB
+        app.use('/proyectos', proyectosRoutes(db));
+        app.use('/proyectos', transaccionesRoutes(db));
+        
+    } catch (error) {
+        console.error('Error conectando a MongoDB:', error);
+        process.exit(1);
+    }
+}
+
+const PORT = process.env.PORT || 5000;
+connectDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Servidor corriendo en puerto ${PORT}`);
+    });
+}); 

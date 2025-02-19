@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { ObjectId } = require('mongodb');
 
-module.exports = function(db) {
+module.exports = (db) => {
     // GET todos los proyectos
     router.get('/', async (req, res) => {
         try {
@@ -14,7 +14,7 @@ module.exports = function(db) {
             console.error('Error al obtener proyectos:', error);
             res.status(500).json({ 
                 error: 'Error al obtener proyectos',
-                message: error.message 
+                details: error.message 
             });
         }
     });
