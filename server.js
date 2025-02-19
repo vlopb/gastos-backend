@@ -53,20 +53,47 @@ app.get('/', (req, res) => {
     });
 });
 
-// Configuración de MongoDB con opciones más estrictas
+// Configuración de MongoDB con opciones más estrictas y session
 const MONGO_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    w: 'majority', // Espera confirmación de la mayoría de los nodos
-    wtimeout: 2500, // Timeout para la operación de escritura
-    retryWrites: true // Reintentar escrituras fallidas
+    w: 'majority',
+    wtimeout: 2500,
+    retryWrites: true,
+    readPreference: 'primary',
+    directConnection: true,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    maxIdleTimeMS: 15000,
+    socketTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 5000,
 };
+
+async function setupIndexes(db) {
+    try {
+        await db.collection('proyectos').createIndex(
+            { "transacciones.fecha": 1 },
+            { background: true }
+        );
+        await db.collection('proyectos').createIndex(
+            { updatedAt: 1 },
+            { background: true }
+        );
+        console.log('Índices creados correctamente');
+    } catch (error) {
+        console.error('Error al crear índices:', error);
+    }
+}
 
 async function connectDB() {
     try {
         const client = await MongoClient.connect(MONGO_URI, MONGO_OPTIONS);
         db = client.db('finanzas');
-        console.log('Conectado a MongoDB');
+        await setupIndexes(db);
+        
+        // Verificar la conexión
+        await db.command({ ping: 1 });
+        console.log('Conectado exitosamente a MongoDB');
         
         // Inicializar rutas
         app.use('/proyectos', proyectosRoutes(db));

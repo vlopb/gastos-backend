@@ -5,51 +5,64 @@ const { ObjectId } = require('mongodb');
 module.exports = (db) => {
     // POST nueva transacción
     router.post('/:proyectoId/transacciones', async (req, res) => {
+        const session = db.client.startSession();
         try {
-            if (!ObjectId.isValid(req.params.proyectoId)) {
-                return res.status(400).json({ error: 'ID inválido' });
-            }
+            await session.withTransaction(async () => {
+                if (!ObjectId.isValid(req.params.proyectoId)) {
+                    throw new Error('ID inválido');
+                }
 
-            const { descripcion, tipo, fecha, monto } = req.body;
-            
-            // Primero obtenemos el proyecto para saber el índice que tendrá la nueva transacción
-            const proyecto = await db.collection('proyectos').findOne(
-                { _id: new ObjectId(req.params.proyectoId) }
-            );
+                const { descripcion, tipo, fecha, monto } = req.body;
+                
+                // Obtener el proyecto con un bloqueo optimista
+                const proyecto = await db.collection('proyectos').findOne(
+                    { _id: new ObjectId(req.params.proyectoId) },
+                    { session }
+                );
 
-            if (!proyecto) {
-                return res.status(404).json({ error: 'Proyecto no encontrado' });
-            }
+                if (!proyecto) {
+                    throw new Error('Proyecto no encontrado');
+                }
 
-            const index = proyecto.transacciones ? proyecto.transacciones.length : 0;
-            
-            const nuevaTransaccion = {
-                descripcion,
-                tipo: tipo.toLowerCase(),
-                fecha,
-                monto: parseFloat(monto)
-            };
+                const index = proyecto.transacciones ? proyecto.transacciones.length : 0;
+                
+                const nuevaTransaccion = {
+                    descripcion,
+                    tipo: tipo.toLowerCase(),
+                    fecha,
+                    monto: parseFloat(monto),
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
 
-            const result = await db.collection('proyectos').updateOne(
-                { _id: new ObjectId(req.params.proyectoId) },
-                { $push: { transacciones: nuevaTransaccion } }
-            );
+                // Actualizar con timestamp
+                const result = await db.collection('proyectos').updateOne(
+                    { _id: new ObjectId(req.params.proyectoId) },
+                    { 
+                        $push: { transacciones: nuevaTransaccion },
+                        $set: { updatedAt: new Date() }
+                    },
+                    { session }
+                );
 
-            if (result.modifiedCount === 0) {
-                return res.status(500).json({ error: 'No se pudo agregar la transacción' });
-            }
+                if (result.modifiedCount === 0) {
+                    throw new Error('No se pudo agregar la transacción');
+                }
 
-            // Devolvemos la transacción con su índice
-            res.json({ 
-                mensaje: 'Transacción agregada con éxito', 
-                transaccion: { ...nuevaTransaccion, index }
+                res.json({ 
+                    mensaje: 'Transacción agregada con éxito', 
+                    transaccion: { ...nuevaTransaccion, index },
+                    timestamp: new Date()
+                });
             });
         } catch (error) {
             console.error('Error al agregar transacción:', error);
-            res.status(500).json({ 
+            res.status(error.message.includes('ID inválido') ? 400 : 500).json({ 
                 error: 'Error al agregar transacción',
                 details: error.message 
             });
+        } finally {
+            await session.endSession();
         }
     });
 
