@@ -38,10 +38,34 @@ app.use((req, res, next) => {
 // Asegurarnos que la URI tenga el formato correcto para SRV
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://vic:Daiana01.@cluster0.qlghn.mongodb.net/finanzas?retryWrites=true&w=majority';
 
+// Configuración de MongoDB extremadamente simple
+const MONGO_OPTIONS = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+};
+
 let db = null;
 let client = null;
 
-// Mover las rutas fuera de la función connectDB
+async function connectDB() {
+    try {
+        // Intentar conectar sin opciones adicionales
+        client = new MongoClient(MONGO_URI);
+        await client.connect();
+        db = client.db('finanzas');
+        
+        // Verificar la conexión
+        await db.command({ ping: 1 });
+        console.log('Conectado exitosamente a MongoDB');
+        
+        return db;
+    } catch (error) {
+        console.error('Error conectando a MongoDB:', error);
+        // No lanzar el error, solo registrarlo
+        return null;
+    }
+}
+
 // Ruta para el favicon con tipo de contenido correcto
 app.get('/favicon.ico', (req, res) => {
     res.set('Content-Type', 'image/x-icon');
@@ -61,60 +85,43 @@ app.get('/', (req, res) => {
     });
 });
 
-// Configuración de MongoDB más simple y compatible con SRV
-const MONGO_OPTIONS = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    retryWrites: true,
-    serverSelectionTimeoutMS: 30000,
-    // Remover directConnection y otras opciones problemáticas
-};
-
-async function connectDB() {
-    try {
-        if (client && client.isConnected()) {
-            return client.db('finanzas');
-        }
-
-        client = await MongoClient.connect(MONGO_URI, MONGO_OPTIONS);
-        db = client.db('finanzas');
-        
-        // Verificar la conexión
-        await db.command({ ping: 1 });
-        console.log('Conectado exitosamente a MongoDB');
-        
-        return db;
-    } catch (error) {
-        console.error('Error conectando a MongoDB:', error);
-        throw error;
-    }
-}
-
-// Inicializar el servidor y la base de datos
+// Inicializar el servidor primero
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
     
-    // Intentar conectar a MongoDB después de que el servidor esté corriendo
-    connectDB()
-        .then(database => {
-            // Configurar rutas que dependen de la base de datos
+    try {
+        const database = await connectDB();
+        if (database) {
+            // Solo configurar rutas si la conexión fue exitosa
             app.use('/proyectos', proyectosRoutes(database));
             app.use('/proyectos', transaccionesRoutes(database));
-        })
-        .catch(error => {
-            console.error('Error inicial al conectar con MongoDB:', error);
-            // No cerrar el servidor, permitir que siga funcionando
-        });
+            console.log('Rutas configuradas correctamente');
+        }
+    } catch (error) {
+        console.error('Error al inicializar la base de datos:', error);
+    }
 });
 
-// Manejador de errores global mejorado
+// Manejador de errores global
 app.use((err, req, res, next) => {
     console.error('Error en la aplicación:', err);
     res.status(500).json({
         error: 'Error interno del servidor',
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Error interno'
+        message: 'Error interno'
     });
+});
+
+// Manejo de cierre limpio
+process.on('SIGTERM', async () => {
+    try {
+        if (client) {
+            await client.close();
+        }
+        server.close();
+    } catch (error) {
+        console.error('Error al cerrar:', error);
+    }
 });
 
 module.exports = app; 
