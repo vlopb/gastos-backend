@@ -8,6 +8,7 @@ const proyectosRoutes = require('./routes/proyectos');
 const transaccionesRoutes = require('./routes/transacciones');
 
 const app = express();
+let db;
 
 // Configuración de seguridad y CORS
 const configureSecurity = () => {
@@ -21,7 +22,7 @@ const configureSecurity = () => {
     });
 
     app.use(cors({
-        origin: true,
+        origin: process.env.FRONTEND_URL || '*',
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
@@ -47,11 +48,15 @@ const configureRoutes = () => {
             message: 'API is running',
             version: '1.0.0',
             endpoints: {
-                proyectos: '/proyectos',
-                transacciones: '/transacciones'
+                proyectos: '/api/proyectos',
+                transacciones: '/api/transacciones'
             }
         });
     });
+
+    // Configurar rutas con la base de datos
+    app.use('/api/proyectos', proyectosRoutes(db));
+    app.use('/api/transacciones', transaccionesRoutes(db));
 };
 
 // Conexión a MongoDB
@@ -65,13 +70,8 @@ const connectDB = async () => {
 
     try {
         const client = await MongoClient.connect(MONGO_URI);
-        const db = client.db('finanzas');
+        db = client.db('finanzas');
         console.log(chalk.green('✅ Conectado a MongoDB'));
-
-        // Inicializar rutas después de conectar a la DB
-        app.use('/proyectos', proyectosRoutes(db));
-        app.use('/transacciones', transaccionesRoutes(db));
-
         return db;
     } catch (error) {
         console.error(chalk.red('❌ Error conectando a MongoDB:', error.message));
@@ -82,11 +82,11 @@ const connectDB = async () => {
 // Inicialización del servidor
 const startServer = async () => {
     try {
+        await connectDB();
         configureSecurity();
         configureMiddleware();
         configureRoutes();
 
-        const db = await connectDB();
         const PORT = process.env.PORT || 5000;
 
         app.listen(PORT, () => {
@@ -94,8 +94,8 @@ const startServer = async () => {
             console.log(chalk.green(`🚀 Servidor corriendo en puerto ${PORT}`));
             console.log(chalk.blue('========================================='));
             console.log(chalk.yellow('📡 Endpoints disponibles:'));
-            console.log(chalk.cyan('   - /proyectos'));
-            console.log(chalk.cyan('   - /transacciones'));
+            console.log(chalk.cyan('   - /api/proyectos'));
+            console.log(chalk.cyan('   - /api/transacciones'));
             console.log(chalk.blue('========================================='));
         });
     } catch (error) {
