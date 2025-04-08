@@ -10,32 +10,30 @@ const citasRoutes = require('./routes/citas');
 
 const app = express();
 
-// Configuración de seguridad y CORS
+// Configuración de seguridad y CORS más flexible
+const allowedOrigins = [
+    'http://localhost:3000', 
+    'https://gastos-production.up.railway.app'
+];
+
 app.use(cors({
-    origin: 'http://localhost:3000',
+    origin: function (origin, callback) {
+        // Permitir solicitudes sin origen (como Postman o curl) o si el origen está en la lista
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200 // Para navegadores antiguos
 }));
 
 // Configuración de middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Headers adicionales para CORS
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    
-    // Handle OPTIONS method
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
-});
 
 // Rutas básicas
 app.get('/favicon.ico', (req, res) => {
