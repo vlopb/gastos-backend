@@ -1,83 +1,187 @@
 const express = require('express');
 const router = express.Router();
-const { ObjectId } = require('mongodb');
+const mongoose = require('mongoose');
 
-module.exports = (db) => {
-    // GET todos los proyectos
-    router.get('/', async (req, res) => {
-        try {
-            console.log('Obteniendo proyectos...');
-            const proyectos = await db.collection('proyectos').find({}).toArray();
-            console.log('Proyectos encontrados:', proyectos.length);
-            res.json(proyectos);
-        } catch (error) {
-            console.error('Error al obtener proyectos:', error);
-            res.status(500).json({ 
-                error: 'Error al obtener proyectos',
-                details: error.message 
+// Esquema para proyectos
+const proyectoSchema = new mongoose.Schema({
+    nombre: {
+        type: String,
+        required: true
+    },
+    descripcion: {
+        type: String,
+        default: ''
+    },
+    fecha_creacion: {
+        type: Date,
+        default: Date.now
+    },
+    transacciones: [{
+        descripcion: String,
+        tipo: {
+            type: String,
+            enum: ['ingreso', 'gasto'],
+            required: true
+        },
+        monto: {
+            type: Number,
+            required: true
+        },
+        fecha: {
+            type: Date,
+            default: Date.now
+        }
+    }]
+});
+
+const Proyecto = mongoose.model('Proyecto', proyectoSchema);
+
+// GET todos los proyectos
+router.get('/', async (req, res) => {
+    try {
+        console.log('Obteniendo proyectos...');
+        const proyectos = await Proyecto.find().sort({ fecha_creacion: -1 });
+        console.log('Proyectos encontrados:', proyectos.length);
+        res.json(proyectos);
+    } catch (error) {
+        console.error('Error al obtener proyectos:', error);
+        res.status(500).json({ 
+            error: 'Error al obtener proyectos',
+            mensaje: error.message 
+        });
+    }
+});
+
+// POST nuevo proyecto
+router.post('/', async (req, res) => {
+    try {
+        const { nombre, descripcion } = req.body;
+        
+        if (!nombre) {
+            return res.status(400).json({
+                error: 'El nombre del proyecto es requerido'
             });
         }
-    });
 
-    // POST nuevo proyecto
-    router.post('/', async (req, res) => {
-        try {
-            const nuevoProyecto = {
-                nombre: req.body.nombre,
-                descripcion: req.body.descripcion || '',
-                fecha_creacion: new Date(),
-                transacciones: []
-            };
-            
-            const result = await db.collection('proyectos').insertOne(nuevoProyecto);
-            res.status(201).json({
-                mensaje: 'Proyecto creado con éxito',
-                proyecto: { ...nuevoProyecto, _id: result.insertedId }
-            });
-        } catch (error) {
-            console.error('Error al crear proyecto:', error);
-            res.status(500).json({ 
-                error: 'Error al crear proyecto',
-                details: error.message 
+        const nuevoProyecto = new Proyecto({
+            nombre,
+            descripcion: descripcion || '',
+            transacciones: []
+        });
+        
+        const proyectoGuardado = await nuevoProyecto.save();
+        res.status(201).json({
+            mensaje: 'Proyecto creado con éxito',
+            proyecto: proyectoGuardado
+        });
+    } catch (error) {
+        console.error('Error al crear proyecto:', error);
+        res.status(500).json({ 
+            error: 'Error al crear proyecto',
+            mensaje: error.message 
+        });
+    }
+});
+
+// GET proyecto por ID
+router.get('/:id', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+        res.json(proyecto);
+    } catch (error) {
+        console.error('Error al obtener proyecto:', error);
+        res.status(500).json({ 
+            error: 'Error al obtener proyecto',
+            mensaje: error.message 
+        });
+    }
+});
+
+// PUT actualizar proyecto
+router.put('/:id', async (req, res) => {
+    try {
+        const { nombre, descripcion } = req.body;
+        const proyecto = await Proyecto.findByIdAndUpdate(
+            req.params.id,
+            { nombre, descripcion },
+            { new: true, runValidators: true }
+        );
+        
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+        
+        res.json({
+            mensaje: 'Proyecto actualizado con éxito',
+            proyecto
+        });
+    } catch (error) {
+        console.error('Error al actualizar proyecto:', error);
+        res.status(500).json({ 
+            error: 'Error al actualizar proyecto',
+            mensaje: error.message 
+        });
+    }
+});
+
+// DELETE proyecto
+router.delete('/:id', async (req, res) => {
+    try {
+        const proyecto = await Proyecto.findByIdAndDelete(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
+        }
+        res.json({ 
+            mensaje: 'Proyecto eliminado con éxito',
+            proyecto
+        });
+    } catch (error) {
+        console.error('Error al eliminar proyecto:', error);
+        res.status(500).json({ 
+            error: 'Error al eliminar proyecto',
+            mensaje: error.message 
+        });
+    }
+});
+
+// POST nueva transacción a un proyecto
+router.post('/:id/transacciones', async (req, res) => {
+    try {
+        const { descripcion, tipo, monto, fecha } = req.body;
+        
+        if (!descripcion || !tipo || !monto) {
+            return res.status(400).json({
+                error: 'Descripción, tipo y monto son requeridos'
             });
         }
-    });
 
-    // GET proyecto por ID
-    router.get('/:id', async (req, res) => {
-        try {
-            if (!ObjectId.isValid(req.params.id)) {
-                return res.status(400).json({ error: 'ID inválido' });
-            }
-            const proyecto = await db.collection('proyectos').findOne({ 
-                _id: new ObjectId(req.params.id) 
-            });
-            if (!proyecto) {
-                return res.status(404).json({ error: 'Proyecto no encontrado' });
-            }
-            res.json(proyecto);
-        } catch (error) {
-            res.status(500).json({ error: 'Error al obtener proyecto' });
+        const proyecto = await Proyecto.findById(req.params.id);
+        if (!proyecto) {
+            return res.status(404).json({ error: 'Proyecto no encontrado' });
         }
-    });
 
-    // DELETE proyecto
-    router.delete('/:id', async (req, res) => {
-        try {
-            if (!ObjectId.isValid(req.params.id)) {
-                return res.status(400).json({ error: 'ID inválido' });
-            }
-            const result = await db.collection('proyectos').deleteOne({ 
-                _id: new ObjectId(req.params.id) 
-            });
-            if (result.deletedCount === 0) {
-                return res.status(404).json({ error: 'Proyecto no encontrado' });
-            }
-            res.json({ mensaje: 'Proyecto eliminado con éxito' });
-        } catch (error) {
-            res.status(500).json({ error: 'Error al eliminar proyecto' });
-        }
-    });
+        proyecto.transacciones.push({
+            descripcion,
+            tipo: tipo.toLowerCase(),
+            monto: Number(monto),
+            fecha: fecha || new Date()
+        });
 
-    return router;
-}; 
+        await proyecto.save();
+        res.status(201).json({
+            mensaje: 'Transacción agregada con éxito',
+            proyecto
+        });
+    } catch (error) {
+        console.error('Error al agregar transacción:', error);
+        res.status(500).json({ 
+            error: 'Error al agregar transacción',
+            mensaje: error.message 
+        });
+    }
+});
+
+module.exports = router; 
